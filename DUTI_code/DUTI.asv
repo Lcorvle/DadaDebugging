@@ -1,0 +1,85 @@
+close all;clear all;
+
+part = 1;
+greedy = true;
+
+data_mode = 'real';
+if strcmp(data_mode, 'real')
+% load data
+    % data = load('dataset.mat');
+    % trust_item = load('trust_item.mat');
+    % trust_item_index = trust_item.indexs;
+    % trust_item_index = trust_item_index + 1;
+    % trust_item_label = trust_item.label;
+    % trust_item_label = double(trust_item_label');
+    % feat = double(data.feature);
+    % label = double(data.label);
+    % label = double(label');
+else
+end
+    
+
+% simulated data for debug
+data = load('dataset.mat');
+trust_item_index = [1, 4];
+trust_item_label = [3, 2];
+trust_item_label = trust_item_label';
+feat = double(data.feature);
+feat = feat(1:5, :);
+label = [1, 1, 2, 3, 3];
+label = label';
+
+
+clear data;
+clear trust_item;
+
+% process trust item
+[num_data, dim_data] = size(feat);
+num_data = int64(num_data);
+[temp ,num_trust] = size(trust_item_index);
+X_trust = feat(trust_item_index, :);
+train_label_trust_item = label(trust_item_index);
+fprintf('number of train points %d, num bugs in trusted items %d\n', num_data, sum(train_label_trust_item ~= trust_item_label));
+
+% debug using DUTI -----------------------------------------------------
+lam = 1; 	% L2 regularization weight of learner
+c_value = 1;  % Confidence parameters on trusted items are set to 100.
+conf = c_value * ones(num_trust, 1);
+max_depth = 20;
+search_grid = 40;
+num_class = 8;
+max_iter = 2;
+tic
+if greedy
+    [bugs, delta, rankings] = greedy_duti_lr_cls(feat, label, X_trust, trust_item_label, ...
+        num_class, conf, lam, max_iter, max_depth, search_grid);
+else
+    [bugs, delta, rankings] = duti_lr_cls(feat, label, X_trust, trust_item_label, ...
+        num_class, conf, lam, max_iter);
+end
+toc
+
+if greedy
+    fprintf('greedy_DUTI done\n');
+else
+    fprintf('DUTI done\n');
+end
+
+
+y_debug = label;
+[~, clean_bug_y] = max(delta(bugs, :), [], 2);
+clean_bug_y = clean_bug_y - 1;
+y_debug(bugs) = clean_bug_y;
+
+num_bugs = sum(bugs);
+fprintf('number of bug found %d\n', num_bugs);
+
+
+% save the result
+if greedy
+    result_filename = sprintf('greedy_result-%d.mat', part);
+else
+    result_filename = sprintf('result-%d.mat', part);
+end
+save(result_filename,'y_debug', 'delta', 'rankings');
+
